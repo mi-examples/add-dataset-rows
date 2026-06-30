@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/pp-dev.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Add Dataset Rows</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.PP_VARIABLES = {
+        // Optional. Create an editable App variable named "App Title" in MI to
+        // override the heading; otherwise the built-in default is used.
+        // The "[App Title]" token is replaced server-side at render time.
+        APP_TITLE: '[App Title]',
+      };
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,116 @@
+/**
+ * Thin client for the Metric Insights REST API.
+ *
+ * All requests use root-relative `/api/...` paths so they resolve against the MI
+ * instance that serves this app:
+ *  - In production the app is served from the MI domain, so the browser session
+ *    cookie authenticates each request automatically.
+ *  - During `npm run dev` the pp-dev proxy forwards `/api/*` to `backendBaseURL`
+ *    and injects authentication (`MI_ACCESS_TOKEN` / interactive login).
+ *
+ * `api/*` routes are exempt from CSRF on the MI backend, so no token is required.
+ */
+
+export interface Dataset {
+  id: number;
+  name: string;
+  /**
+   * 'Y' when the dataset stores historical instances. Such datasets require a
+   * `measurement_time` on every import.
+   */
+  keep_history?: string;
+}
+
+export interface DatasetColumn {
+  /** Internal column identifier — used as the key when sending row data. */
+  reference_name: string;
+  /** Human-readable column label. */
+  column_name: string;
+  /** 'numeric' | 'datetime' | 'text'. */
+  value_type: string;
+}
+
+/** A single row, keyed by column `reference_name`. */
+export type DatasetRow = Record<string, string>;
+
+interface ApiEnvelope {
+  status?: string;
+  message?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+
+  try {
+    res = await fetch(path, {
+      credentials: 'include',
+      ...init,
+      headers: { Accept: 'application/json', ...(init?.headers ?? {}) },
+    });
+  } catch {
+    throw new Error('Could not reach the Metric Insights server.');
+  }
+
+  let body: ApiEnvelope = {};
+
+  try {
+    body = (await res.json()) as ApiEnvelope;
+  } catch {
+    // Non-JSON response (e.g. an HTML login page when the session expired).
+    if (!res.ok) {
+      throw new Error(`Request failed (HTTP ${res.status}).`);
+    }
+  }
+
+  if (!res.ok || body.status === 'ERROR') {
+    throw new Error(body.message || body.error || `Request failed (HTTP ${res.status}).`);
+  }
+
+  return body as T;
+}
+
+/** List datasets the current user can see. */
+export async function listDatasets(): Promise<Dataset[]> {
+  const body = await apiFetch<{ datasets?: Dataset[] }>('/api/dataset');
+
+  return (body.datasets ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Get the column definitions for a dataset, in display order. */
+export async function getDatasetColumns(datasetId: number): Promise<DatasetColumn[]> {
+  const body = await apiFetch<{ dataset_columns?: DatasetColumn[] }>(
+    `/api/dataset_column?dataset=${encodeURIComponent(datasetId)}`,
+  );
+
+  return body.dataset_columns ?? [];
+}
+
+export interface AddRowOptions {
+  /**
+   * Required when the dataset keeps history. Format: 'YYYY-MM-DD' or
+   * 'YYYY-MM-DD HH:mm:ss'.
+   */
+  measurementTime?: string;
+}
+
+/**
+ * Append a single row to a manual (CSV) dataset.
+ *
+ * The dataset's `data_fetch_method` must be 'manual' and the current user must
+ * have edit permission on it; otherwise the API responds with an error that is
+ * surfaced as the thrown message.
+ */
+export async function addDatasetRow(datasetId: number, row: DatasetRow, options: AddRowOptions = {}): Promise<void> {
+  await apiFetch(`/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      dataset: datasetId,
+      data: [row],
+      append: 'Y',
+      ...(options.measurementTime ? { measurement_time: options.measurementTime } : {}),
+    }),
+  });
+}
