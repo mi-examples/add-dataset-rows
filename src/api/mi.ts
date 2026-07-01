@@ -79,9 +79,14 @@ export async function listDatasets(): Promise<Dataset[]> {
 }
 
 /** Get the column definitions for a dataset, in display order. */
-export async function getDatasetColumns(datasetId: number): Promise<DatasetColumn[]> {
+export async function getDatasetColumns(
+  datasetId: number,
+  options: { bustCache?: boolean } = {},
+): Promise<DatasetColumn[]> {
+  // The dev proxy caches GETs; bust it when reading columns right after creating them.
+  const cacheBuster = options.bustCache ? `&_=${Date.now()}` : '';
   const body = await apiFetch<{ dataset_columns?: DatasetColumn[] }>(
-    `/api/dataset_column?dataset=${encodeURIComponent(datasetId)}`,
+    `/api/dataset_column?dataset=${encodeURIComponent(datasetId)}${cacheBuster}`,
   );
 
   return body.dataset_columns ?? [];

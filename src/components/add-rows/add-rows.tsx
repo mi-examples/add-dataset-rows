@@ -27,6 +27,21 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Best-effort value_type guess for a freshly defined column (MI detects the real type). */
+function inferType(value: string): string {
+  const v = value.trim();
+
+  if (v !== '' && !Number.isNaN(Number(v))) {
+    return 'numeric';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+    return 'datetime';
+  }
+
+  return 'text';
+}
+
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -136,6 +151,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [rows, setRows] = useState<DatasetDataRow[] | null>(null);
+  const [rowsTotal, setRowsTotal] = useState(0);
   const [rowsLoading, setRowsLoading] = useState(true);
   const [rowsError, setRowsError] = useState<string | null>(null);
 
@@ -173,6 +189,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       .then((result) => {
         if (!cancelled) {
           setRows(result.rows);
+          setRowsTotal(result.total);
         }
       })
       .catch((err: unknown) => {
@@ -191,15 +208,37 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
     };
   }, [datasetId]);
 
+  // After columns are created from scratch: switch to the normal form immediately
+  // (optimistic), then reconcile with MI's actual column definitions and load rows.
+  function handleColumnsCreated(created: DatasetColumn[]) {
+    setColumns(created);
+    setSuccessMessage('Columns created and first row added.');
+    void reconcileColumns();
+    void refreshRows();
+  }
+
+  async function reconcileColumns() {
+    try {
+      const fresh = await getDatasetColumns(datasetId, { bustCache: true });
+
+      if (fresh.length > 0) {
+        setColumns(fresh);
+      }
+    } catch {
+      // Keep the optimistic columns if the reconcile read fails.
+    }
+  }
+
   // Refresh the recent-rows table after adding a row (called from an event handler).
   async function refreshRows() {
     setRowsLoading(true);
     setRowsError(null);
 
     try {
-      const { rows: latest } = await getLastRows(datasetId, 10);
+      const { rows: latest, total } = await getLastRows(datasetId, 10);
 
       setRows(latest);
+      setRowsTotal(total);
     } catch (err: unknown) {
       setRowsError(messageOf(err));
     } finally {
@@ -259,7 +298,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
   }
 
   if (!columns || columns.length === 0) {
-    return <p className={styles.error}>This dataset has no editable columns.</p>;
+    return <DefineColumns datasetId={datasetId} keepsHistory={keepsHistory} onCreated={handleColumnsCreated} />;
   }
 
   const form = (
@@ -303,6 +342,12 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
     <section className={styles.recent}>
       <h2 className={styles.recentTitle}>Last 10 rows</h2>
 
+      {!rowsLoading && !rowsError && rows && rows.length > 0 && (
+        <p className={styles.recentCaption}>
+          Showing last {rows.length} of {rowsTotal}
+        </p>
+      )}
+
       {rowsLoading && <p className={styles.muted}>Loading rows…</p>}
       {rowsError && <p className={styles.error}>{rowsError}</p>}
       {!rowsLoading && !rowsError && rows && rows.length === 0 && <p className={styles.muted}>No rows yet.</p>}
@@ -341,5 +386,150 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       {form}
       {table}
     </>
+  );
+}
+
+interface DefineColumnsProps {
+  datasetId: number;
+  keepsHistory: boolean;
+  onCreated: (columns: DatasetColumn[]) => void;
+}
+
+interface DraftColumn {
+  id: number;
+  name: string;
+  value: string;
+}
+
+// Monotonic id source for draft-column React keys (uniqueness is all that matters).
+let draftColumnSeq = 0;
+
+function makeDraftColumn(): DraftColumn {
+  return { id: draftColumnSeq++, name: '', value: '' };
+}
+
+function DefineColumns({ datasetId, keepsHistory, onCreated }: DefineColumnsProps) {
+  const [draft, setDraft] = useState<DraftColumn[]>(() => [makeDraftColumn(), makeDraftColumn()]);
+  const [measurementDate, setMeasurementDate] = useState<string>(today());
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function updateDraft(id: number, patch: Partial<DraftColumn>) {
+    setDraft((prev) => prev.map((col) => (col.id === id ? { ...col, ...patch } : col)));
+    setError(null);
+  }
+
+  function addColumn() {
+    setDraft((prev) => [...prev, makeDraftColumn()]);
+  }
+
+  function removeColumn(id: number) {
+    setDraft((prev) => (prev.length > 1 ? prev.filter((col) => col.id !== id) : prev));
+  }
+
+  const names = draft.map((col) => col.name.trim());
+  const namesFilled = names.every((name) => name !== '');
+  const namesUnique = new Set(names.map((name) => name.toLowerCase())).size === names.length;
+  const valuesFilled = draft.every((col) => col.value.trim() !== '');
+  const canSubmit =
+    namesFilled && namesUnique && valuesFilled && (!keepsHistory || measurementDate !== '') && !submitting;
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!canSubmit) {
+      return;
+    }
+
+    const row: DatasetRow = {};
+
+    for (const col of draft) {
+      row[col.name.trim()] = col.value.trim();
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await addDatasetRow(datasetId, row, {
+        measurementTime: keepsHistory ? measurementDate : undefined,
+      });
+      onCreated(
+        draft.map((col) => ({
+          reference_name: col.name.trim(),
+          column_name: col.name.trim(),
+          value_type: inferType(col.value),
+        })),
+      );
+    } catch (err: unknown) {
+      setError(messageOf(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form className={styles.fields} onSubmit={handleSubmit}>
+      <p className={styles.notice}>
+        This dataset has no columns yet. Define the columns and the first row to get started — column types are detected
+        automatically from the values.
+      </p>
+
+      {draft.map((col, index) => (
+        <div key={col.id} className={styles.draftColumn}>
+          <div className={styles.draftHeader}>
+            <span className={styles.label}>Column {index + 1}</span>
+            {draft.length > 1 && (
+              <button
+                type="button"
+                className={styles.removeColumn}
+                onClick={() => removeColumn(col.id)}
+                disabled={submitting}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <input
+            className={styles.control}
+            placeholder="Column name"
+            value={col.name}
+            onChange={(e) => updateDraft(col.id, { name: e.target.value })}
+            disabled={submitting}
+          />
+          <input
+            className={styles.control}
+            placeholder="First value"
+            value={col.value}
+            onChange={(e) => updateDraft(col.id, { value: e.target.value })}
+            disabled={submitting}
+          />
+        </div>
+      ))}
+
+      <button type="button" className={styles.addColumn} onClick={addColumn} disabled={submitting}>
+        + Add column
+      </button>
+
+      {keepsHistory && (
+        <label className={styles.field}>
+          <span className={styles.label}>Measurement date</span>
+          <input
+            className={styles.control}
+            type="date"
+            value={measurementDate}
+            onChange={(e) => setMeasurementDate(e.target.value)}
+            disabled={submitting}
+          />
+        </label>
+      )}
+
+      <button className={styles.submit} type="submit" disabled={!canSubmit}>
+        {submitting ? 'Creating…' : 'Create columns & add row'}
+      </button>
+
+      {!namesUnique && <p className={styles.error}>Column names must be unique.</p>}
+      {error && <p className={styles.error}>{error}</p>}
+    </form>
   );
 }

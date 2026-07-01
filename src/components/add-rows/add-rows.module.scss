@@ -135,11 +135,17 @@ $mi-disabled-bg: rgba(34, 34, 34, 0.08);
 }
 
 .recentTitle {
-  margin: 0 0 8px;
+  margin: 0 0 2px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
   color: $mi-text;
+}
+
+.recentCaption {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #666666;
 }
 
 .tableWrap {
@@ -176,6 +182,68 @@ $mi-disabled-bg: rgba(34, 34, 34, 0.08);
   .numeric {
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+.notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #666666;
+}
+
+.draftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  border-radius: 3px;
+}
+
+.draftHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.removeColumn {
+  padding: 0;
+  font-size: 11px;
+  color: #ac2b2b;
+  background: none;
+  border: 0;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.addColumn {
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  color: $mi-primary;
+  background: none;
+  border: 1px solid rgba(7, 91, 126, 0.4);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+
+  &:hover:not(:disabled) {
+    background-color: rgba(7, 91, 126, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
