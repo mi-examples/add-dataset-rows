@@ -9,7 +9,10 @@ It lets a user:
 2. **Fill in the column values** — inputs are generated automatically from the dataset's
    schema (one per column, typed by the column's `value_type`).
 3. **Add a row** — appends the row to the dataset via the MI REST API.
-4. **See the last 10 rows** of the dataset in a table below the form (refreshed after each add).
+4. **See the last 10 rows** of the dataset in a table below the form (refreshed after each add),
+   with a "showing last N of M" count.
+5. **Start from scratch** — if the dataset has no columns yet, define column names and the first
+   row's values; the first write auto-creates the columns (MI infers their types).
 
 > The app assumes a simple **CSV / manual** dataset (e.g. two columns). It works with any
 > number of columns, but the dataset must be of fetch-method **`manual`**.
@@ -32,6 +35,11 @@ auth. `api/*` routes are CSRF-exempt on the backend.
 
 The read has no insertion-order key, so the "last 10 rows" are fetched by reading the total
 count (`amount`) and offsetting to the tail (`offset = total − 10`).
+
+**Defining columns:** MI has no "create column" endpoint — a `PUT` to a manual dataset with **no
+columns** auto-creates them from the row's keys (`column_name` = `reference_name` = the key;
+`value_type` is detected from the value). So the app collects column names + first-row values and
+creates both in that first write.
 
 The row object is keyed by each column's `reference_name`. If the selected dataset keeps
 history (`keep_history === "Y"`), a **Measurement date** field appears and is sent as
