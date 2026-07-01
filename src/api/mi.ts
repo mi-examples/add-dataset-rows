@@ -87,6 +87,41 @@ export async function getDatasetColumns(datasetId: number): Promise<DatasetColum
   return body.dataset_columns ?? [];
 }
 
+/** A row returned from the dataset, keyed by column identifier. */
+export type DatasetDataRow = Record<string, unknown>;
+
+/**
+ * Fetch the last `count` rows of a dataset, in the dataset's natural order.
+ *
+ * The read API has no exposed insertion-order key, so we read the total row
+ * count (`amount`) and offset to the tail to get the most recent rows.
+ */
+export async function getLastRows(datasetId: number, count = 10): Promise<{ rows: DatasetDataRow[]; total: number }> {
+  const url = `/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`;
+  const jsonHeaders = { 'Content-Type': 'application/json' };
+
+  const countRes = await apiFetch<{ amount?: number }>(url, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ amount: 'Y', limit: 1 }),
+  });
+
+  const total = countRes.amount ?? 0;
+
+  if (total === 0) {
+    return { rows: [], total: 0 };
+  }
+
+  const offset = Math.max(0, total - count);
+  const dataRes = await apiFetch<{ data?: DatasetDataRow[] }>(url, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ offset, limit: count }),
+  });
+
+  return { rows: Array.isArray(dataRes.data) ? dataRes.data : [], total };
+}
+
 export interface AddRowOptions {
   /**
    * Required when the dataset keeps history. Format: 'YYYY-MM-DD' or

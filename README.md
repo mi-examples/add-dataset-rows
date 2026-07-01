@@ -9,6 +9,7 @@ It lets a user:
 2. **Fill in the column values** — inputs are generated automatically from the dataset's
    schema (one per column, typed by the column's `value_type`).
 3. **Add a row** — appends the row to the dataset via the MI REST API.
+4. **See the last 10 rows** of the dataset in a table below the form (refreshed after each add).
 
 > The app assumes a simple **CSV / manual** dataset (e.g. two columns). It works with any
 > number of columns, but the dataset must be of fetch-method **`manual`**.
@@ -27,6 +28,10 @@ auth. `api/*` routes are CSRF-exempt on the backend.
 | List datasets | `GET /api/dataset` → `{ datasets: [{ id, name, keep_history }] }` |
 | Get columns | `GET /api/dataset_column?dataset={id}` → `{ dataset_columns: [{ reference_name, column_name, value_type }] }` |
 | Add a row | `PUT /api/dataset_data?dataset={id}` with body `{ dataset, data: [row], append: "Y", measurement_time? }` |
+| Read rows | `POST /api/dataset_data?dataset={id}` with body `{ limit, offset, amount: "Y" }` → `{ data: [row], amount }` |
+
+The read has no insertion-order key, so the "last 10 rows" are fetched by reading the total
+count (`amount`) and offsetting to the tail (`offset = total − 10`).
 
 The row object is keyed by each column's `reference_name`. If the selected dataset keeps
 history (`keep_history === "Y"`), a **Measurement date** field appears and is sent as
@@ -34,8 +39,8 @@ history (`keep_history === "Y"`), a **Measurement date** field appears and is se
 
 The relevant code:
 
-- `src/api/mi.ts` — the API client (`listDatasets`, `getDatasetColumns`, `addDatasetRow`).
-- `src/components/add-rows/add-rows.tsx` — the dataset picker + dynamic row form.
+- `src/api/mi.ts` — the API client (`listDatasets`, `getDatasetColumns`, `addDatasetRow`, `getLastRows`).
+- `src/components/add-rows/add-rows.tsx` — the dataset picker + dynamic row form + recent-rows table.
 - `src/constants.ts` — reads MI template variables from `window.PP_VARIABLES`.
 
 ---

@@ -3,9 +3,11 @@ import styles from './add-rows.module.scss';
 import {
   addDatasetRow,
   getDatasetColumns,
+  getLastRows,
   listDatasets,
   type Dataset,
   type DatasetColumn,
+  type DatasetDataRow,
   type DatasetRow,
 } from '../../api/mi';
 
@@ -27,6 +29,29 @@ function today(): string {
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function formatValue(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value);
+}
+
+/** Read a row's value for a column, tolerating reference_name/column_name/case differences. */
+function cellValue(row: DatasetDataRow, col: DatasetColumn): string {
+  for (const key of [col.reference_name, col.column_name]) {
+    if (key in row) {
+      return formatValue(row[key]);
+    }
+  }
+
+  const lower = col.reference_name.toLowerCase();
+
+  for (const key of Object.keys(row)) {
+    if (key.toLowerCase() === lower) {
+      return formatValue(row[key]);
+    }
+  }
+
+  return '';
 }
 
 export default function AddRows() {
@@ -110,6 +135,10 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const [rows, setRows] = useState<DatasetDataRow[] | null>(null);
+  const [rowsLoading, setRowsLoading] = useState(true);
+  const [rowsError, setRowsError] = useState<string | null>(null);
+
   // Load this dataset's columns on mount.
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +164,48 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       cancelled = true;
     };
   }, [datasetId]);
+
+  // Load the recent rows on mount.
+  useEffect(() => {
+    let cancelled = false;
+
+    getLastRows(datasetId, 10)
+      .then((result) => {
+        if (!cancelled) {
+          setRows(result.rows);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setRowsError(messageOf(err));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRowsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId]);
+
+  // Refresh the recent-rows table after adding a row (called from an event handler).
+  async function refreshRows() {
+    setRowsLoading(true);
+    setRowsError(null);
+
+    try {
+      const { rows: latest } = await getLastRows(datasetId, 10);
+
+      setRows(latest);
+    } catch (err: unknown) {
+      setRowsError(messageOf(err));
+    } finally {
+      setRowsLoading(false);
+    }
+  }
 
   const allFilled =
     !!columns && columns.length > 0 && columns.every((col) => (values[col.reference_name] ?? '').trim() !== '');
@@ -171,6 +242,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       setSuccessMessage('Row added successfully.');
       // Keep the dataset selected; clear values ready for the next row.
       setValues({});
+      void refreshRows();
     } catch (err: unknown) {
       setSubmitError(messageOf(err));
     } finally {
@@ -190,7 +262,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
     return <p className={styles.error}>This dataset has no editable columns.</p>;
   }
 
-  return (
+  const form = (
     <form className={styles.fields} onSubmit={handleSubmit}>
       {columns.map((col) => (
         <label key={col.reference_name} className={styles.field}>
@@ -225,5 +297,49 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       {submitError && <p className={styles.error}>{submitError}</p>}
       {successMessage && <p className={styles.success}>{successMessage}</p>}
     </form>
+  );
+
+  const table = (
+    <section className={styles.recent}>
+      <h2 className={styles.recentTitle}>Last 10 rows</h2>
+
+      {rowsLoading && <p className={styles.muted}>Loading rows…</p>}
+      {rowsError && <p className={styles.error}>{rowsError}</p>}
+      {!rowsLoading && !rowsError && rows && rows.length === 0 && <p className={styles.muted}>No rows yet.</p>}
+
+      {!rowsError && rows && rows.length > 0 && (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {columns.map((col) => (
+                  <th key={col.reference_name} className={col.value_type === 'numeric' ? styles.numeric : undefined}>
+                    {col.column_name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  {columns.map((col) => (
+                    <td key={col.reference_name} className={col.value_type === 'numeric' ? styles.numeric : undefined}>
+                      {cellValue(row, col)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <>
+      {form}
+      {table}
+    </>
   );
 }

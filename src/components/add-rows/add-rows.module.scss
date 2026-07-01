@@ -130,6 +130,55 @@ $mi-disabled-bg: rgba(34, 34, 34, 0.08);
   }
 }
 
+.recent {
+  margin-top: 32px;
+}
+
+.recentTitle {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: $mi-text;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  border-radius: 3px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.5;
+  color: $mi-text;
+
+  th,
+  td {
+    padding: 6px 12px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(34, 34, 34, 0.08);
+  }
+
+  th {
+    font-weight: 600;
+    color: #666666;
+    background-color: rgba(34, 34, 34, 0.02);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 .muted {
   margin: 0;
   font-size: 12px;
