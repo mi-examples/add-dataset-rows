@@ -13,6 +13,8 @@ It lets a user:
    with a "showing last N of M" count.
 5. **Start from scratch** — if the dataset has no columns yet, define column names and the first
    row's values; the first write auto-creates the columns (MI infers their types).
+6. **Delete a row** — an ✕ at the end of each row asks for confirmation inline ("Confirm Delete"),
+   then removes it. Available for non-historical datasets only (see below).
 
 > The app assumes a simple **CSV / manual** dataset (e.g. two columns). It works with any
 > number of columns, but the dataset must be of fetch-method **`manual`**.
@@ -35,6 +37,14 @@ auth. `api/*` routes are CSRF-exempt on the backend.
 
 The read has no insertion-order key, so the "last 10 rows" are fetched by reading the total
 count (`amount`) and offsetting to the tail (`offset = total − 10`).
+
+**Deleting a row:** MI has **no per-row delete** for manual datasets — a `measurement_time`
+instance is the atomic unit. So deleting a row is a **read-all → drop-the-row → rewrite**: the app
+reads every row (`POST /api/dataset_data` with no limit), removes the one whose values match the
+clicked row (aborting if no match is found, so nothing is lost), and rewrites the remaining rows
+with `append:"N"`. Deleting the last remaining row instead clears the data
+(`PUT /api/dataset/id/{id}?call=delete_data`). Delete is offered only for **non-historical**
+datasets (`keep_history` ≠ `"Y"`): overwriting a historical dataset could collapse its snapshots.
 
 **Defining columns:** MI has no "create column" endpoint — a `PUT` to a manual dataset with **no
 columns** auto-creates them from the row's keys (`column_name` = `reference_name` = the key;

@@ -161,3 +161,41 @@ export async function addDatasetRow(datasetId: number, row: DatasetRow, options:
     }),
   });
 }
+
+/** Read every row of a dataset (no limit) — used to rewrite the set when deleting a row. */
+export async function getAllRows(datasetId: number): Promise<DatasetDataRow[]> {
+  const body = await apiFetch<{ data?: DatasetDataRow[] }>(
+    `/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+
+  return Array.isArray(body.data) ? body.data : [];
+}
+
+/**
+ * Overwrite a manual dataset's data with exactly `rows` (append:'N').
+ *
+ * MI has no per-row delete, so deleting a row = rewriting the full set without it.
+ * `rows` must be non-empty (an empty rewrite is rejected); use clearDatasetData to
+ * remove the final row.
+ */
+export async function replaceDatasetRows(datasetId: number, rows: DatasetRow[]): Promise<void> {
+  await apiFetch(`/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataset: datasetId, data: rows, append: 'N' }),
+  });
+}
+
+/** Remove all data from a dataset (used when deleting the last remaining row). */
+export async function clearDatasetData(datasetId: number): Promise<void> {
+  await apiFetch(`/api/dataset/id/${encodeURIComponent(datasetId)}?call=delete_data`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: datasetId, call: 'delete_data' }),
+  });
+}

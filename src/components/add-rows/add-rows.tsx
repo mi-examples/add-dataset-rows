@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import styles from './add-rows.module.scss';
 import {
   addDatasetRow,
+  clearDatasetData,
+  getAllRows,
   getDatasetColumns,
   getLastRows,
   listDatasets,
+  replaceDatasetRows,
   type Dataset,
   type DatasetColumn,
   type DatasetDataRow,
@@ -67,6 +70,22 @@ function cellValue(row: DatasetDataRow, col: DatasetColumn): string {
   }
 
   return '';
+}
+
+/** Two rows are "the same" when every column's rendered value matches. */
+function rowsMatch(a: DatasetDataRow, b: DatasetDataRow, columns: DatasetColumn[]): boolean {
+  return columns.every((col) => cellValue(a, col) === cellValue(b, col));
+}
+
+/** Convert a read row into a write payload keyed by reference_name. */
+function rowToPayload(row: DatasetDataRow, columns: DatasetColumn[]): DatasetRow {
+  const payload: DatasetRow = {};
+
+  for (const col of columns) {
+    payload[col.reference_name] = cellValue(row, col);
+  }
+
+  return payload;
 }
 
 export default function AddRows() {
@@ -155,6 +174,14 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
   const [rowsLoading, setRowsLoading] = useState(true);
   const [rowsError, setRowsError] = useState<string | null>(null);
 
+  const [confirmIndex, setConfirmIndex] = useState<number | null>(null);
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Row delete is a full rewrite (MI has no per-row delete); only safe for
+  // non-historical datasets, where there is a single data set to rewrite.
+  const canDelete = !keepsHistory;
+
   // Load this dataset's columns on mount.
   useEffect(() => {
     let cancelled = false;
@@ -229,10 +256,11 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
     }
   }
 
-  // Refresh the recent-rows table after adding a row (called from an event handler).
+  // Refresh the recent-rows table after adding or deleting a row (event handler).
   async function refreshRows() {
     setRowsLoading(true);
     setRowsError(null);
+    setConfirmIndex(null);
 
     try {
       const { rows: latest, total } = await getLastRows(datasetId, 10);
@@ -243,6 +271,38 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       setRowsError(messageOf(err));
     } finally {
       setRowsLoading(false);
+    }
+  }
+
+  async function handleConfirmDelete(target: DatasetDataRow, index: number) {
+    setDeletingIndex(index);
+    setDeleteError(null);
+
+    try {
+      // No per-row delete in MI: rewrite the full set without the matched row.
+      const all = await getAllRows(datasetId);
+      const matchAt = all.findIndex((candidate) => rowsMatch(candidate, target, columns ?? []));
+
+      if (matchAt < 0) {
+        throw new Error('Could not find the row to delete — it may have changed. Refresh and try again.');
+      }
+
+      const remaining = all.filter((_, i) => i !== matchAt);
+
+      if (remaining.length === 0) {
+        await clearDatasetData(datasetId);
+      } else {
+        await replaceDatasetRows(
+          datasetId,
+          remaining.map((row) => rowToPayload(row, columns ?? [])),
+        );
+      }
+
+      await refreshRows();
+    } catch (err: unknown) {
+      setDeleteError(messageOf(err));
+    } finally {
+      setDeletingIndex(null);
     }
   }
 
@@ -362,6 +422,7 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
                     {col.column_name}
                   </th>
                 ))}
+                {canDelete && <th className={styles.actionsCol} aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -372,12 +433,52 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
                       {cellValue(row, col)}
                     </td>
                   ))}
+                  {canDelete && (
+                    <td className={styles.actionsCol}>
+                      {confirmIndex === index ? (
+                        <span className={styles.confirmRow}>
+                          <button
+                            type="button"
+                            className={styles.confirmDelete}
+                            onClick={() => handleConfirmDelete(row, index)}
+                            disabled={deletingIndex !== null}
+                          >
+                            {deletingIndex === index ? 'Deleting…' : 'Confirm Delete'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.cancelDelete}
+                            onClick={() => setConfirmIndex(null)}
+                            disabled={deletingIndex !== null}
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.deleteRow}
+                          aria-label="Delete row"
+                          title="Delete row"
+                          onClick={() => {
+                            setConfirmIndex(index);
+                            setDeleteError(null);
+                          }}
+                          disabled={deletingIndex !== null}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {deleteError && <p className={styles.error}>{deleteError}</p>}
     </section>
   );
 
