@@ -79,6 +79,50 @@ values of the hosting App's editable variables at render time. This app exposes 
 variable, **`App Title`** (`APP_TITLE`), read in `src/constants.ts` (unreplaced placeholders fall
 back to a default). Add more by declaring a token in `index.html` and reading it in `constants.ts`.
 
+## Design system & look-and-feel — do not deviate
+
+**This app must look like a native part of Metric Insights.** Match the existing look exactly:
+reuse the design tokens and CSS-module classes already in
+`src/components/add-rows/add-rows.module.scss`, and **do not introduce new colors, fonts, radii,
+spacings, or bespoke component styles.** A new control should be visually indistinguishable from
+MI's own forms. When in doubt, copy an existing element's markup and classes.
+
+These tokens mirror MI's design system (the source of truth this app was built against — treat them
+as fixed):
+
+| Token | Value |
+| --- | --- |
+| Primary | `#075B7E` (contrast text `#fff`) |
+| Text — primary / muted | `#222222` / `#666666` |
+| Error / Success | `#AC2B2B` / `#077E45` |
+| Input border — default / hover / focus | `rgba(34,34,34,0.4)` / `rgba(7,91,126,0.8)` / `#075B7E` |
+| Focus ring | `box-shadow: 0 0 0 2px rgba(7,91,126,0.24)` |
+| Divider / disabled background | `rgba(34,34,34,0.08)` / `rgba(34,34,34,0.24)` |
+| Border radius | **3px** everywhere |
+| Font | `Inter, Arial, Helvetica, sans-serif`, **12px**, line-height 1.5 |
+| Label | 12px / weight 400 / `#222`, 4px gap above the control |
+| Control height | **28px**; input padding `0 12px` |
+| Primary button | contained `#075B7E`, white text, 28px, padding `3px 16px`, **no shadow**, `text-transform: none`; hover `#054556` |
+
+Rules of thumb:
+
+- Reuse `styles.control`, `styles.label`, `styles.field`, `styles.submit`, and the table/spinner
+  classes. Introduce a new SCSS variable only for something genuinely new, derived from the palette
+  above.
+- Inputs use MI's distinctive **teal input text** (`#075B7E`). The native `<select>` is styled to
+  match MI's dropdown control (MI uses the `react-select` library, not the native dropdown).
+- Keep `Inter` in the font stack — MI supplies it when the app is embedded.
+
+### Embedded-layout constraint (easy to break)
+
+The app renders **inside** MI's page shell — MI injects its top bar and HUD around your `#root`.
+**Keep global CSS minimal and scoped.** Do **not** restyle `body`, `html`, or bare element selectors
+(`button`, `a`, `input`, …), and do **not** center the page with global flexbox. Doing so hijacks
+MI's own layout — the Vite starter's `body { display: flex; place-items: center }` once pushed the MI
+top bar into the middle of the page. All app styling lives under `.app` (`src/assets/css/app.scss`)
+and the component `*.module.scss` files; `src/index.scss` is intentionally a minimal, safe reset —
+keep it that way.
+
 ## Configuration (per MI instance)
 
 Edit `pp-dev.config.ts`:
@@ -93,6 +137,18 @@ For local dev, put a personal access token in `.env` (git-ignored):
 MI_ACCESS_TOKEN=your_personal_access_token
 ```
 
+Things you can only get from your MI instance (not from this repo):
+
+- **Personal access token** — generate one at `https://<instance>/api-token` (as a user with the
+  needed access). Never commit it; `.env` is git-ignored.
+- **`appId`** — the hosting App's ID, shown in its admin URL:
+  `https://<instance>/admin/page/edit/id/<appId>`.
+- **Editable-variable names must match exactly.** `[App Title]` is replaced only if the App has an
+  editable variable whose display name is exactly `App Title` (case- and space-sensitive). Same for
+  any variable you add.
+- **Permissions** — the signed-in user needs **View** on a dataset to read it and **Edit** to
+  add/delete rows; the App itself must be shared with the users who should see it.
+
 ## Commands
 
 | Command | Purpose |
@@ -101,7 +157,7 @@ MI_ACCESS_TOKEN=your_personal_access_token
 | `npm run build` | Type-check, build to `dist/`, and package `dist-zip/<name>.zip` |
 | `npm run lint` | ESLint (max-warnings 0) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Unit tests via Node's built-in runner (`node --test`) — requires Node ≥ 22 |
+| `npm test` | Unit tests via Node's built-in runner (`node --test`) — needs Node ≥ 22.18 (native TS); CI uses Node 24 |
 
 CI (`.github/workflows/ci.yml`) runs lint + typecheck + tests on every push/PR.
 
@@ -128,6 +184,13 @@ permission on the target dataset. Full steps are in `README.md`.
 - Keep data-shaping logic in `src/lib/rows.ts` as **pure, tested functions**. Add tests when you
   touch write/delete logic — it mutates customer data.
 - API calls stay in `src/api/mi.ts`; components don't call `fetch` directly.
+
+## Testing changes safely
+
+Add and delete **mutate real dataset data**, and delete **rewrites the entire dataset** — there is
+no undo. When developing or reviewing, point the app at a **throwaway manual dataset**, never
+production data. Deleting the last remaining row clears the dataset. `npm test` covers the pure
+data-shaping logic without touching MI, so it's always safe to run.
 
 ## Known limitations (safe to hand a customer)
 
