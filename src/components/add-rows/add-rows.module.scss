@@ -97,6 +97,27 @@ $mi-disabled-bg: rgba(34, 34, 34, 0.08);
   }
 }
 
+.submitRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(7, 91, 126, 0.25);
+  border-top-color: $mi-primary;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // MUI contained primary button.
 .submit {
   align-self: flex-start;

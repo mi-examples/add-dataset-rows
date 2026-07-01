@@ -350,9 +350,12 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
         </label>
       )}
 
-      <button className={styles.submit} type="submit" disabled={!canSubmit}>
-        {submitting ? 'Adding…' : 'Add Row'}
-      </button>
+      <div className={styles.submitRow}>
+        <button className={styles.submit} type="submit" disabled={!canSubmit}>
+          Add Row
+        </button>
+        {submitting && <span className={styles.spinner} role="status" aria-label="Adding row" />}
+      </div>
 
       {submitError && <p className={styles.error}>{submitError}</p>}
       {successMessage && <p className={styles.success}>{successMessage}</p>}
