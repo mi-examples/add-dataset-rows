@@ -65,7 +65,7 @@ export default function AddRows() {
           <span className={styles.error}>{datasetsError}</span>
         ) : (
           <select
-            className={styles.control}
+            className={`${styles.control} ${styles.select}`}
             value={selectedId}
             disabled={!datasets}
             onChange={(e) => setSelectedId(e.target.value === '' ? '' : Number(e.target.value))}
