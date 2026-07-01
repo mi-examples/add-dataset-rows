@@ -39,7 +39,10 @@ count (`amount`) and offsetting to the tail (`offset = total − 10`).
 **Defining columns:** MI has no "create column" endpoint — a `PUT` to a manual dataset with **no
 columns** auto-creates them from the row's keys (`column_name` = `reference_name` = the key;
 `value_type` is detected from the value). So the app collects column names + first-row values and
-creates both in that first write.
+creates both in that first write. That first write must use **`append: "N"`** — appending first
+reads the dataset's storage table, which doesn't exist yet for a never-populated dataset (you'd get
+a `Table 'dataset_<id>' doesn't exist` error); `append: "N"` skips the read and provisions the
+table, columns, and row. Subsequent adds use `append: "Y"`.
 
 The row object is keyed by each column's `reference_name`. If the selected dataset keeps
 history (`keep_history === "Y"`), a **Measurement date** field appears and is sent as

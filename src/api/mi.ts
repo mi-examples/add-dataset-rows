@@ -133,10 +133,17 @@ export interface AddRowOptions {
    * 'YYYY-MM-DD HH:mm:ss'.
    */
   measurementTime?: string;
+  /**
+   * When true (default) the row is appended to existing data. Appending reads the
+   * dataset's storage table first — which does NOT exist for a never-populated
+   * dataset — so pass false for the very first write, which provisions the table,
+   * columns, and row. (There is nothing to append to on an empty dataset anyway.)
+   */
+  append?: boolean;
 }
 
 /**
- * Append a single row to a manual (CSV) dataset.
+ * Write a single row to a manual (CSV) dataset.
  *
  * The dataset's `data_fetch_method` must be 'manual' and the current user must
  * have edit permission on it; otherwise the API responds with an error that is
@@ -149,7 +156,7 @@ export async function addDatasetRow(datasetId: number, row: DatasetRow, options:
     body: JSON.stringify({
       dataset: datasetId,
       data: [row],
-      append: 'Y',
+      append: options.append === false ? 'N' : 'Y',
       ...(options.measurementTime ? { measurement_time: options.measurementTime } : {}),
     }),
   });

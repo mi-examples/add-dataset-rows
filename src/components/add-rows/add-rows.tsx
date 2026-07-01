@@ -451,8 +451,11 @@ function DefineColumns({ datasetId, keepsHistory, onCreated }: DefineColumnsProp
     setError(null);
 
     try {
+      // First write to an empty dataset: append:false skips the read of the (not-yet-
+      // existing) storage table and provisions the table, columns, and this row.
       await addDatasetRow(datasetId, row, {
         measurementTime: keepsHistory ? measurementDate : undefined,
+        append: false,
       });
       onCreated(
         draft.map((col) => ({
