@@ -44,8 +44,11 @@ instance is the atomic unit. So deleting a row is a **read-all → drop-the-row 
 reads every row (`POST /api/dataset_data` with no limit), removes the one whose values match the
 clicked row (aborting if no match is found, so nothing is lost), and rewrites the remaining rows
 with `append:"N"`. Deleting the last remaining row instead clears the data
-(`PUT /api/dataset/id/{id}?call=delete_data`). Delete is offered only for **non-historical**
-datasets (`keep_history` ≠ `"Y"`): overwriting a historical dataset could collapse its snapshots.
+(`PUT /api/dataset/id/{id}?call=delete_data`). Surviving rows are round-tripped **as read**
+(no re-stringifying), so a delete doesn't reformat them. Delete is offered only for
+**non-historical** datasets (`keep_history` ≠ `"Y"`, since overwriting a historical dataset could
+collapse its snapshots) **and only under `MAX_DELETE_ROWS` (2,000) rows** — the rewrite reads the
+whole dataset into the browser, so larger sets should be edited in the MI dataset editor.
 
 **Defining columns:** MI has no "create column" endpoint — a `PUT` to a manual dataset with **no
 columns** auto-creates them from the row's keys (`column_name` = `reference_name` = the key;
@@ -171,3 +174,7 @@ from a template. You upload this build as a template, then create an App from it
 | `npm run build` | Type-check, build, and package the deployable zip. |
 | `npm run preview` | Preview the production build locally. |
 | `npm run lint` | Run ESLint. |
+| `npm run typecheck` | Type-check without emitting. |
+| `npm test` | Run unit tests (`node --test`) for the row helpers in `src/lib/`. |
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, and tests on every push/PR.

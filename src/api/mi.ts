@@ -185,10 +185,11 @@ export async function getAllRows(datasetId: number): Promise<DatasetDataRow[]> {
  * Overwrite a manual dataset's data with exactly `rows` (append:'N').
  *
  * MI has no per-row delete, so deleting a row = rewriting the full set without it.
+ * Values are sent as read (raw), so surviving rows are round-tripped unchanged.
  * `rows` must be non-empty (an empty rewrite is rejected); use clearDatasetData to
  * remove the final row.
  */
-export async function replaceDatasetRows(datasetId: number, rows: DatasetRow[]): Promise<void> {
+export async function replaceDatasetRows(datasetId: number, rows: Record<string, unknown>[]): Promise<void> {
   await apiFetch(`/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

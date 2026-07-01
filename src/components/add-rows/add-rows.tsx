@@ -13,79 +13,37 @@ import {
   type DatasetDataRow,
   type DatasetRow,
 } from '../../api/mi';
+import { cellValue, inferType, inputTypeFor, rowsMatch, rowToRawPayload } from '../../lib/rows';
 
-/** Maps an MI column value_type to an appropriate HTML input type. */
-function inputTypeFor(valueType: string): string {
-  switch (valueType) {
-    case 'numeric':
-      return 'number';
-    case 'datetime':
-      return 'date';
-    default:
-      return 'text';
-  }
-}
+/**
+ * Deleting a row rewrites the whole dataset (MI has no per-row delete) and reads
+ * every row into the browser first, so it's only offered for reasonably small
+ * datasets. Larger ones should be edited in the MI dataset editor.
+ */
+const MAX_DELETE_ROWS = 2000;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** Best-effort value_type guess for a freshly defined column (MI detects the real type). */
-function inferType(value: string): string {
-  const v = value.trim();
-
-  if (v !== '' && !Number.isNaN(Number(v))) {
-    return 'numeric';
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
-    return 'datetime';
-  }
-
-  return 'text';
 }
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function formatValue(value: unknown): string {
-  return value === null || value === undefined ? '' : String(value);
-}
-
-/** Read a row's value for a column, tolerating reference_name/column_name/case differences. */
-function cellValue(row: DatasetDataRow, col: DatasetColumn): string {
-  for (const key of [col.reference_name, col.column_name]) {
-    if (key in row) {
-      return formatValue(row[key]);
-    }
+/** Why the row-delete control is hidden, or null when delete is available. */
+function deleteDisabledReasonFor(keepsHistory: boolean, tooLarge: boolean): string | null {
+  if (keepsHistory) {
+    return 'Row delete is unavailable for datasets that keep history.';
   }
 
-  const lower = col.reference_name.toLowerCase();
-
-  for (const key of Object.keys(row)) {
-    if (key.toLowerCase() === lower) {
-      return formatValue(row[key]);
-    }
+  if (tooLarge) {
+    return (
+      `Row delete is disabled for datasets over ${MAX_DELETE_ROWS.toLocaleString()} rows — ` +
+      'edit large datasets in the MI dataset editor.'
+    );
   }
 
-  return '';
-}
-
-/** Two rows are "the same" when every column's rendered value matches. */
-function rowsMatch(a: DatasetDataRow, b: DatasetDataRow, columns: DatasetColumn[]): boolean {
-  return columns.every((col) => cellValue(a, col) === cellValue(b, col));
-}
-
-/** Convert a read row into a write payload keyed by reference_name. */
-function rowToPayload(row: DatasetDataRow, columns: DatasetColumn[]): DatasetRow {
-  const payload: DatasetRow = {};
-
-  for (const col of columns) {
-    payload[col.reference_name] = cellValue(row, col);
-  }
-
-  return payload;
+  return null;
 }
 
 export default function AddRows() {
@@ -178,9 +136,11 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Row delete is a full rewrite (MI has no per-row delete); only safe for
-  // non-historical datasets, where there is a single data set to rewrite.
-  const canDelete = !keepsHistory;
+  // Row delete is a full rewrite (MI has no per-row delete): only for
+  // non-historical datasets, and only when small enough to read + rewrite safely.
+  const tooLargeToDelete = rowsTotal > MAX_DELETE_ROWS;
+  const canDelete = !keepsHistory && !tooLargeToDelete;
+  const deleteDisabledReason = deleteDisabledReasonFor(keepsHistory, tooLargeToDelete);
 
   // Load this dataset's columns on mount.
   useEffect(() => {
@@ -292,9 +252,10 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
       if (remaining.length === 0) {
         await clearDatasetData(datasetId);
       } else {
+        // Round-trip surviving rows as-read so the rewrite doesn't reformat them.
         await replaceDatasetRows(
           datasetId,
-          remaining.map((row) => rowToPayload(row, columns ?? [])),
+          remaining.map((row) => rowToRawPayload(row, columns ?? [])),
         );
       }
 
@@ -476,6 +437,10 @@ function DatasetRowForm({ datasetId, keepsHistory }: DatasetRowFormProps) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {!rowsLoading && !rowsError && rows && rows.length > 0 && deleteDisabledReason && (
+        <p className={styles.muted}>{deleteDisabledReason}</p>
       )}
 
       {deleteError && <p className={styles.error}>{deleteError}</p>}

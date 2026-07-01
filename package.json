@@ -18,6 +18,8 @@
     "dev": "pp-dev",
     "build": "tsc && pp-dev build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
     "preview": "pp-dev preview"
   },
   "engines": {
