@@ -5,7 +5,8 @@ A minimal Metric Insights **Custom App** (Power Pack / Portal Page template, bui
 
 It lets a user:
 
-1. **Pick a dataset** from a dropdown of the datasets they can access.
+1. **Pick a dataset** from a dropdown — only **manual/CSV** datasets are listed (the app filters
+   to `data_fetch_method = 'manual'`, the only datasets it can write to).
 2. **Fill in the column values** — inputs are generated automatically from the dataset's
    schema (one per column, typed by the column's `value_type`).
 3. **Add a row** — appends the row to the dataset via the MI REST API.
@@ -30,7 +31,7 @@ auth. `api/*` routes are CSRF-exempt on the backend.
 
 | Action | Request |
 | --- | --- |
-| List datasets | `GET /api/dataset` → `{ datasets: [{ id, name, keep_history }] }` |
+| List datasets | `GET /api/dataset?data_source=manual` → `{ datasets: [{ id, name, keep_history }] }` (manual only) |
 | Get columns | `GET /api/dataset_column?dataset={id}` → `{ dataset_columns: [{ reference_name, column_name, value_type }] }` |
 | Add a row | `PUT /api/dataset_data?dataset={id}` with body `{ dataset, data: [row], append: "Y", measurement_time? }` |
 | Read rows | `POST /api/dataset_data?dataset={id}` with body `{ limit, offset, amount: "Y" }` → `{ data: [row], amount }` |

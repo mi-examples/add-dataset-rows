@@ -71,9 +71,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-/** List datasets the current user can see. */
+/**
+ * List the manual/CSV datasets the current user can see.
+ *
+ * `data_source=manual` filters server-side to `data_fetch_method = 'manual'` (the
+ * only datasets this app can write to); other types (SQL, plugin, etc.) are excluded.
+ */
 export async function listDatasets(): Promise<Dataset[]> {
-  const body = await apiFetch<{ datasets?: Dataset[] }>('/api/dataset');
+  const body = await apiFetch<{ datasets?: Dataset[] }>('/api/dataset?data_source=manual');
 
   return (body.datasets ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
 }
