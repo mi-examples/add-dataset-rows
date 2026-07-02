@@ -172,9 +172,18 @@ CI (`.github/workflows/ci.yml`) runs lint + typecheck + tests on every push/PR.
 
 ## Deploy to Metric Insights
 
-`npm run build`, then in MI: **Editor → Apps → Templates → ＋**, upload `dist-zip/<name>.zip`, then
-create an **App** from that template and set its variables/sharing. The signed-in user needs **edit**
-permission on the target dataset. Full steps are in `README.md`.
+`npm run build`, then in MI: **Editor → Apps → Templates → ＋**, upload the whole
+`dist-zip/<name>.zip`, then create an **App** from that template and set its variables/sharing. The
+signed-in user needs **edit** permission on the target dataset. Full steps are in `README.md`.
+
+**Deploy gotcha — assets must actually be uploaded.** MI serves `/pt/<name>/assets/*` (and
+`/p/<name>/assets/*`) out of the `portal_page_asset` store, populated by extracting the uploaded
+**ZIP**. If you upload/paste only `index.html`, the hashed `assets/index-<hash>.{js,css}` files 404
+and the browser rejects them with a `text/html` MIME error ("Refused to apply style…", "Failed to
+load module script…"). Fix: upload the **entire** `dist-zip/<name>.zip` (index.html **+** `assets/`)
+via the template's Assets/Sync upload. Asset URLs are absolute `/pt/<name>/…`, so the template's
+**internal_name must equal the package `name`**, and each `npm run build` re-hashes filenames — always
+upload the whole build together.
 
 ## Project layout
 

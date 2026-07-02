@@ -137,11 +137,21 @@ from a template. You upload this build as a template, then create an App from it
      letters/digits/`-`/`_` only).
    - Save.
 
-2. **Upload the build**
-   - Open the template you just created (`/editor/page/template/{id}`) → **Assets** (or
-     **Code**) tab → upload **`dist-zip/add-dataset-rows.zip`**.
-   - This populates the template's HTML/JS/CSS from the build. (`index.html` already declares
-     `window.PP_VARIABLES = { APP_TITLE: '[App Title]' }`.)
+2. **Upload the build** — the step that trips people up.
+   - Open the template (`/editor/page/template/{id}`) → **Assets** / **Code** (or **Sync**) →
+     upload the whole **`dist-zip/add-dataset-rows.zip`**. It contains `index.html` **and** the
+     `assets/` folder. MI extracts it: `index.html` → the template's HTML, and every `assets/*`
+     file → served at `/pt/<internal_name>/assets/…` (from the `portal_page_asset` store).
+   - **Do not just paste `index.html`.** The page references hashed asset files (e.g.
+     `assets/index-<hash>.js` / `.css`); if those aren't uploaded, the browser gets an **HTML 404**
+     for them and fails with *"Refused to apply style … MIME type ('text/html')"* and *"Failed to
+     load module script … MIME type text/html"*. Uploading only the HTML is the #1 cause of this.
+   - Upload the **whole build together** — each `npm run build` produces new
+     `assets/index-<hash>` filenames, so a stale `index.html` with fresh assets (or vice-versa)
+     won't match.
+   - The asset URLs are absolute (`/pt/add-dataset-rows/assets/…`), so the template's
+     **internal name must equal the package name** (`add-dataset-rows`). To use a different
+     internal name, change `name` in `package.json` and rebuild.
 
 3. **Define the editable variable** (optional)
    - Template → **Variables** tab → add a variable named **`App Title`**, type **Text**, with a
