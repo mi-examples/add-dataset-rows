@@ -70,6 +70,15 @@ re-check after MI upgrades. This is the single most important caveat in this doc
    editors can silently overwrite each other; delete can drop rows another user added between the
    read and the rewrite. Treat as single-editor.
 
+10. **`dataset_column` is admin-only; column reads fall back to `dataset_data`.** MI's
+    `api.rest_form` role allow-list exposes `dataset`, `dataset_data`, `dataset_instance` to
+    non-admins but **not `dataset_column`**, so Power/Regular Users get **403** fetching column
+    definitions. `getDatasetColumns()` therefore tries `dataset_column` and, on failure, derives
+    columns from a `dataset_data` read's `metadata` + row keys (`columnsFromMetadata`). The proper
+    fix is tracked in **MI-29907** (add `dataset_column` to the allow-list); once shipped, the
+    fallback can be removed. Caveat: a non-admin cannot define columns on a brand-new **empty**
+    dataset until then (the fallback has no columns to read).
+
 ---
 
 ## Template variables
@@ -200,3 +209,5 @@ data-shaping logic without touching MI, so it's always safe to run.
 - No concurrent-edit protection (single-editor assumption).
 - "Last 10 rows" is storage order, not guaranteed insertion order; a large dataset's read is slow.
 - Behavior depends on MI's current API semantics (see the Critical section) — validate after upgrades.
+- `dataset_column` is admin-only (MI-29907); non-admins use a `dataset_data`-metadata fallback and
+  can't define columns on a brand-new empty dataset until that fix ships.

@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { DatasetColumn, DatasetDataRow } from '../api/mi.ts';
-import { cellValue, inferType, inputTypeFor, rawCellValue, rowsMatch, rowToRawPayload } from './rows.ts';
+import {
+  cellValue,
+  columnsFromMetadata,
+  inferType,
+  inputTypeFor,
+  rawCellValue,
+  rowsMatch,
+  rowToRawPayload,
+} from './rows.ts';
 
 const cols: DatasetColumn[] = [
   { reference_name: 'user', column_name: 'MI username', value_type: 'text' },
@@ -81,5 +89,35 @@ describe('rowToRawPayload', () => {
 
   it('uses empty string for absent columns', () => {
     assert.deepEqual(rowToRawPayload({ user: 'x' }, cols), { user: 'x', amount: '' });
+  });
+});
+
+describe('columnsFromMetadata', () => {
+  const metadata = [
+    { name: 'MI username', type: 'text' },
+    { name: 'Amount', type: 'numeric' },
+  ];
+
+  it('takes reference_name from the first row keys, in column order', () => {
+    const firstRow: DatasetDataRow = { user: 'bob', amount: 5 };
+    const built = columnsFromMetadata(metadata, firstRow);
+
+    assert.deepEqual(built, [
+      { reference_name: 'user', column_name: 'MI username', value_type: 'text' },
+      { reference_name: 'amount', column_name: 'Amount', value_type: 'numeric' },
+    ]);
+  });
+
+  it('falls back to the display name as reference_name when there are no rows', () => {
+    const built = columnsFromMetadata(metadata, undefined);
+
+    assert.deepEqual(built, [
+      { reference_name: 'MI username', column_name: 'MI username', value_type: 'text' },
+      { reference_name: 'Amount', column_name: 'Amount', value_type: 'numeric' },
+    ]);
+  });
+
+  it('returns no columns for empty metadata', () => {
+    assert.deepEqual(columnsFromMetadata([], undefined), []);
   });
 });

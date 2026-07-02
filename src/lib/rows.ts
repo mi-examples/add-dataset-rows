@@ -1,4 +1,4 @@
-import type { DatasetColumn, DatasetDataRow } from '../api/mi';
+import type { DatasetColumn, DatasetDataRow, DatasetMetadataColumn } from '../api/mi';
 
 /** Maps an MI column value_type to an appropriate HTML input type. */
 export function inputTypeFor(valueType: string): string {
@@ -89,4 +89,23 @@ export function rowToRawPayload(row: DatasetDataRow, columns: DatasetColumn[]): 
   }
 
   return payload;
+}
+
+/**
+ * Build columns from a `dataset_data` read's `metadata` — the fallback used when
+ * the admin-only `dataset_column` endpoint is forbidden (MI-29907). `metadata`
+ * gives each column's display name + type in column order; the first row's keys
+ * (if any) supply the `reference_name`s, falling back to the display name.
+ */
+export function columnsFromMetadata(
+  metadata: DatasetMetadataColumn[],
+  firstRow: DatasetDataRow | undefined,
+): DatasetColumn[] {
+  const keys = firstRow ? Object.keys(firstRow) : [];
+
+  return metadata.map((meta, index) => ({
+    reference_name: keys[index] ?? meta.name,
+    column_name: meta.name,
+    value_type: meta.type,
+  }));
 }

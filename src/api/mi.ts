@@ -11,6 +11,8 @@
  * `api/*` routes are exempt from CSRF on the MI backend, so no token is required.
  */
 
+import { columnsFromMetadata } from '../lib/rows';
+
 export interface Dataset {
   id: number;
   name: string;
@@ -28,6 +30,14 @@ export interface DatasetColumn {
   column_name: string;
   /** 'numeric' | 'datetime' | 'text'. */
   value_type: string;
+}
+
+/** Per-column metadata returned alongside a dataset_data read. */
+export interface DatasetMetadataColumn {
+  /** Display name (column_name). */
+  name: string;
+  /** value_type: 'numeric' | 'datetime' | 'text'. */
+  type: string;
 }
 
 /** A single row, keyed by column `reference_name`. */
@@ -83,18 +93,49 @@ export async function listDatasets(): Promise<Dataset[]> {
   return (body.datasets ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Get the column definitions for a dataset, in display order. */
+/**
+ * Get the column definitions for a dataset, in display order.
+ *
+ * `dataset_column` is admin-only in MI (MI-29907), so for Power/Regular Users the
+ * request is forbidden; in that case we fall back to deriving columns from a
+ * `dataset_data` read, which non-admins can access.
+ */
 export async function getDatasetColumns(
   datasetId: number,
   options: { bustCache?: boolean } = {},
 ): Promise<DatasetColumn[]> {
   // The dev proxy caches GETs; bust it when reading columns right after creating them.
   const cacheBuster = options.bustCache ? `&_=${Date.now()}` : '';
-  const body = await apiFetch<{ dataset_columns?: DatasetColumn[] }>(
-    `/api/dataset_column?dataset=${encodeURIComponent(datasetId)}${cacheBuster}`,
+
+  try {
+    const body = await apiFetch<{ dataset_columns?: DatasetColumn[] }>(
+      `/api/dataset_column?dataset=${encodeURIComponent(datasetId)}${cacheBuster}`,
+    );
+
+    return body.dataset_columns ?? [];
+  } catch {
+    return getColumnsFromData(datasetId);
+  }
+}
+
+/**
+ * Fallback column source for non-admins: read one row of `dataset_data` (which
+ * Regular/Power Users can access) and build columns from its `metadata` and row keys.
+ */
+async function getColumnsFromData(datasetId: number): Promise<DatasetColumn[]> {
+  const body = await apiFetch<{ data?: DatasetDataRow[]; metadata?: DatasetMetadataColumn[] }>(
+    `/api/dataset_data?dataset=${encodeURIComponent(datasetId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit: 1 }),
+    },
   );
 
-  return body.dataset_columns ?? [];
+  const metadata = Array.isArray(body.metadata) ? body.metadata : [];
+  const firstRow = Array.isArray(body.data) && body.data.length > 0 ? body.data[0] : undefined;
+
+  return columnsFromMetadata(metadata, firstRow);
 }
 
 /** A row returned from the dataset, keyed by column identifier. */

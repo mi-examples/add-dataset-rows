@@ -32,7 +32,7 @@ auth. `api/*` routes are CSRF-exempt on the backend.
 | Action | Request |
 | --- | --- |
 | List datasets | `GET /api/dataset?data_source=manual` → `{ datasets: [{ id, name, keep_history }] }` (manual only) |
-| Get columns | `GET /api/dataset_column?dataset={id}` → `{ dataset_columns: [{ reference_name, column_name, value_type }] }` |
+| Get columns | `GET /api/dataset_column?dataset={id}` → `{ dataset_columns: [{ reference_name, column_name, value_type }] }` (admin-only; non-admins fall back to `dataset_data` metadata — see MI-29907) |
 | Add a row | `PUT /api/dataset_data?dataset={id}` with body `{ dataset, data: [row], append: "Y", measurement_time? }` |
 | Read rows | `POST /api/dataset_data?dataset={id}` with body `{ limit, offset, amount: "Y" }` → `{ data: [row], amount }` |
 
