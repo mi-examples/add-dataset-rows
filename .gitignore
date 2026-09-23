@@ -29,3 +29,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets — never commit (SEC-8587)
+*.pem
